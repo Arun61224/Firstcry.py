@@ -100,10 +100,10 @@ tcs_rate = st.sidebar.number_input("TCS (on Tax) (e.g., 0.10)", value=0.10, min_
 # --- Main App Tabs ---
 tab1, tab2, tab3, tab4 = st.tabs(["Bulk Payout Checker", "Bulk Price Calculator", "Single Payout Checker", "Single Price Calculator"])
 
-# --- TAB 1: Bulk Payout Checker (Unchanged) ---
+# --- TAB 1: Bulk Payout Checker (MODIFIED) ---
 with tab1:
     st.header("Bulk Payout Checker (Forward)")
-    st.write("Upload file with `Given_Sale_Price` and `Cost` to find the `Net_Profit` for all products.")
+    st.write("Upload file with `Given_Sale_Price` and `Cost` to find the `Net_Profit` and `Margin_Percent` for all products.")
 
     # 1. Download Template
     with st.expander("Step 1: Download Payout Template"):
@@ -147,7 +147,18 @@ with tab1:
                         results_df = pd.DataFrame(results_list)
                         df = df.join(results_df)
                         
-                        cols_to_round = ["Final_Settled_Amount", "Net_Profit", "Taxable_Amount", "Flat_Deduction_Amount", "Royalty_Fee_Amount", "TDS_Amount", "TCS_Amount"]
+                        # --- ADDED: Calculate Margin ---
+                        df["Margin_Percent"] = df.apply(
+                            lambda row: (row["Net_Profit"] / row["Final_Settled_Amount"]) * 100 if row["Final_Settled_Amount"] > 0 else 0,
+                            axis=1
+                        )
+                        # --- END ADDED ---
+                        
+                        cols_to_round = [
+                            "Final_Settled_Amount", "Net_Profit", "Taxable_Amount", 
+                            "Flat_Deduction_Amount", "Royalty_Fee_Amount", "TDS_Amount", "TCS_Amount",
+                            "Margin_Percent" # Added Margin_Percent
+                        ]
                         df[cols_to_round] = df[cols_to_round].round(2)
                         
                         st.session_state.processed_payout_df = df
@@ -163,7 +174,9 @@ with tab1:
         
         cols_order = [
             "Product_SKU", "Given_Sale_Price", "Product_Cost", "GST_Rate_Percent", "Royalty_Percent",
-            "Final_Settled_Amount", "Net_Profit", "Taxable_Amount",
+            "Final_Settled_Amount", "Net_Profit", 
+            "Margin_Percent", # Added Margin_Percent
+            "Taxable_Amount",
             "Flat_Deduction_Amount", "Royalty_Fee_Amount", "TDS_Amount", "TCS_Amount"
         ]
         
@@ -176,7 +189,7 @@ with tab1:
         )
 
 
-# --- TAB 2: Bulk Price Calculator (MODIFIED) ---
+# --- TAB 2: Bulk Price Calculator (Unchanged) ---
 with tab2:
     st.header("Bulk Price Calculator (Reverse)")
     st.write("Upload file with `Cost` and `Target_Net_Profit` to find the `Required_Sale_Price`.")

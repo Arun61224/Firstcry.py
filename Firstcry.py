@@ -44,7 +44,7 @@ def calculate_payout(sale_price, product_cost, gst_rate, royalty_percent, flat_r
         }
     except Exception: return None
 
-# --- Excel Helper Function (NEW) ---
+# --- Excel Helper Function (Same as before) ---
 
 def to_excel(df, cols_order, highlight_col_name=None):
     """Converts DataFrame to Excel in-memory, with optional highlighting."""
@@ -57,7 +57,6 @@ def to_excel(df, cols_order, highlight_col_name=None):
         
         worksheet = writer.sheets['Sheet1']
         
-        # Apply highlighting if specified
         if highlight_col_name and highlight_col_name in final_cols:
             highlight_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid") # Yellow
             col_index = final_cols.index(highlight_col_name) + 1
@@ -80,11 +79,88 @@ flat_rate = st.sidebar.number_input("Flat Deduction (e.g., 0.42)", value=0.42, m
 tds_rate = st.sidebar.number_input("TDS (on Taxable) (e.g., 0.001)", value=0.001, min_value=0.0, max_value=1.0, step=0.001, format="%.3f")
 tcs_rate = st.sidebar.number_input("TCS (on Tax) (e.g., 0.10)", value=0.10, min_value=0.0, max_value=1.0, step=0.01)
 
-# --- Main App Tabs ---
-tab1, tab2, tab3 = st.tabs(["Bulk Price Calculator", "Single Payout Checker", "Bulk Payout Checker"])
+# --- (UPDATED) Main App Tabs ---
+# New Order: 1. Bulk Payout, 2. Bulk Price, 3. Single Payout
+tab1, tab2, tab3 = st.tabs(["Bulk Payout Checker", "Bulk Price Calculator", "Single Payout Checker"])
 
-# --- TAB 1: Bulk Price Calculator ---
+# --- TAB 1: Bulk Payout Checker ---
 with tab1:
+    st.header("Bulk Payout Checker (Forward)")
+    st.write("Upload file with `Given_Sale_Price` and `Cost` to find the `Net_Profit` for all products.")
+
+    # 1. Download Template
+    with st.expander("Step 1: Download Payout Template"):
+        payout_template_df = pd.DataFrame({
+            "Product_SKU": ["SKU-001", "SKU-002"],
+            "Given_Sale_Price": [1045.00, 1500.00],
+            "Product_Cost": [500.00, 750.00],
+            "GST_Rate_Percent": [5, 12],
+            "Royalty_Percent": [10, 0]
+        })
+        st.download_button(
+            label="Download Payout Template",
+            data=to_excel(payout_template_df, payout_template_df.columns),
+            file_name="payout_template.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+    # 2. Upload File
+    st.subheader("Step 2: Upload and Process File")
+    uploaded_payout_file = st.file_uploader("Upload your Payout Template", type=["xlsx"], key="payout_uploader")
+
+    if uploaded_payout_file:
+        try:
+            df = pd.read_excel(uploaded_payout_file)
+            st.dataframe(df.head(), use_container_width=True)
+
+            required_cols = ["Given_Sale_Price", "Product_Cost", "GST_Rate_Percent", "Royalty_Percent"]
+            if not all(col in df.columns for col in df.columns):
+                st.error(f"Input file must have columns: {', '.join(required_cols)}")
+            else:
+                # 3. Process File
+                if st.button("Process Payout File", type="primary"):
+                    with st.spinner("Calculating..."):
+                        results_list = []
+                        for _, row in df.iterrows():
+                            payout_data = calculate_payout(
+                                row["Given_Sale_Price"], row["Product_Cost"], row["GST_Rate_Percent"],
+                                row["Royalty_Percent"], flat_rate, tds_rate, tcs_rate)
+                            results_list.append(payout_data)
+
+                        results_df = pd.DataFrame(results_list)
+                        df = df.join(results_df)
+                        
+                        cols_to_round = ["Final_Settled_Amount", "Net_Profit", "Taxable_Amount", "Flat_Deduction_Amount", "Royalty_Fee_Amount", "TDS_Amount", "TCS_Amount"]
+                        df[cols_to_round] = df[cols_to_round].round(2)
+                        
+                        st.session_state.processed_payout_df = df
+                        st.success(f"Processing Complete! {len(df)} products processed.")
+
+        except Exception as e:
+            st.error(f"Error processing file: {e}")
+
+    # 4. Download Results
+    if "processed_payout_df" in st.session_state:
+        st.subheader("Step 3: Download Results")
+        st.dataframe(st.session_state.processed_payout_df.head(), use_container_width=True)
+        
+        cols_order = [
+            "Product_SKU", "Given_Sale_Price", "Product_Cost", "GST_Rate_Percent", "Royalty_Percent",
+            "Final_Settled_Amount", "Net_Profit", "Taxable_Amount",
+            "Flat_Deduction_Amount", "Royalty_Fee_Amount", "TDS_Amount", "TCS_Amount"
+        ]
+        
+        excel_data = to_excel(st.session_state.processed_payout_df, cols_order, highlight_col_name="Net_Profit")
+        st.download_button(
+            label="Download Payout Results (Highlighted)",
+            data=excel_data,
+            file_name="payout_results.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+
+# --- TAB 2: Bulk Price Calculator ---
+with tab2:
     st.header("Bulk Price Calculator (Reverse)")
     st.write("Upload file with `Cost` and `Target_Net_Profit` to find the `Required_Sale_Price`.")
 
@@ -174,8 +250,8 @@ with tab1:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
-# --- TAB 2: Single Payout Checker ---
-with tab2:
+# --- TAB 3: Single Payout Checker ---
+with tab3:
     st.header("Single Payout Checker (Forward)")
     st.write("Enter a `Sale Price` to see your `Net Profit` and all deductions.")
     
@@ -212,78 +288,3 @@ with tab2:
                 st.write(f"**TCS:** ₹ {results['TCS_Amount']:,.2f}")
         else:
             st.error("Calculation Error.")
-
-# --- TAB 3: Bulk Payout Checker ---
-with tab3:
-    st.header("Bulk Payout Checker (Forward)")
-    st.write("Upload file with `Given_Sale_Price` and `Cost` to find the `Net_Profit` for all products.")
-
-    # 1. Download Template
-    with st.expander("Step 1: Download Payout Template"):
-        payout_template_df = pd.DataFrame({
-            "Product_SKU": ["SKU-001", "SKU-002"],
-            "Given_Sale_Price": [1045.00, 1500.00],
-            "Product_Cost": [500.00, 750.00],
-            "GST_Rate_Percent": [5, 12],
-            "Royalty_Percent": [10, 0]
-        })
-        st.download_button(
-            label="Download Payout Template",
-            data=to_excel(payout_template_df, payout_template_df.columns),
-            file_name="payout_template.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-
-    # 2. Upload File
-    st.subheader("Step 2: Upload and Process File")
-    uploaded_payout_file = st.file_uploader("Upload your Payout Template", type=["xlsx"], key="payout_uploader")
-
-    if uploaded_payout_file:
-        try:
-            df = pd.read_excel(uploaded_payout_file)
-            st.dataframe(df.head(), use_container_width=True)
-
-            required_cols = ["Given_Sale_Price", "Product_Cost", "GST_Rate_Percent", "Royalty_Percent"]
-            if not all(col in df.columns for col in df.columns):
-                st.error(f"Input file must have columns: {', '.join(required_cols)}")
-            else:
-                # 3. Process File
-                if st.button("Process Payout File", type="primary"):
-                    with st.spinner("Calculating..."):
-                        results_list = []
-                        for _, row in df.iterrows():
-                            payout_data = calculate_payout(
-                                row["Given_Sale_Price"], row["Product_Cost"], row["GST_Rate_Percent"],
-                                row["Royalty_Percent"], flat_rate, tds_rate, tcs_rate)
-                            results_list.append(payout_data)
-
-                        results_df = pd.DataFrame(results_list)
-                        df = df.join(results_df)
-                        
-                        cols_to_round = ["Final_Settled_Amount", "Net_Profit", "Taxable_Amount", "Flat_Deduction_Amount", "Royalty_Fee_Amount", "TDS_Amount", "TCS_Amount"]
-                        df[cols_to_round] = df[cols_to_round].round(2)
-                        
-                        st.session_state.processed_payout_df = df
-                        st.success(f"Processing Complete! {len(df)} products processed.")
-
-        except Exception as e:
-            st.error(f"Error processing file: {e}")
-
-    # 4. Download Results
-    if "processed_payout_df" in st.session_state:
-        st.subheader("Step 3: Download Results")
-        st.dataframe(st.session_state.processed_payout_df.head(), use_container_width=True)
-        
-        cols_order = [
-            "Product_SKU", "Given_Sale_Price", "Product_Cost", "GST_Rate_Percent", "Royalty_Percent",
-            "Final_Settled_Amount", "Net_Profit", "Taxable_Amount",
-            "Flat_Deduction_Amount", "Royalty_Fee_Amount", "TDS_Amount", "TCS_Amount"
-        ]
-        
-        excel_data = to_excel(st.session_state.processed_payout_df, cols_order, highlight_col_name="Net_Profit")
-        st.download_button(
-            label="Download Payout Results (Highlighted)",
-            data=excel_data,
-            file_name="payout_results.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )

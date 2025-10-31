@@ -12,18 +12,9 @@ def calculate_sale_price(product_cost, target_profit, gst_rate, royalty_percent,
         gst_r = gst_rate / 100.0
         royalty_r = royalty_percent / 100.0
         numerator = target_profit + product_cost
-        # Denominator logic: (1 - flat - royalty) - (TDS_on_Taxable + TCS_on_Tax)
-        # We need to express TDS and TCS in terms of Sale_Price (SP)
-        # Taxable = SP / (1+gst_r)
-        # GST = SP - Taxable = SP * (1 - 1/(1+gst_r)) = SP * (gst_r / (1+gst_r))
-        # TDS_Amount = Taxable * tds_rate = (SP / (1+gst_r)) * tds_rate
-        # TCS_Amount = GST * tcs_rate = (SP * (gst_r / (1+gst_r))) * tcs_rate
-        # Total_Deductions = SP*flat + SP*royalty + TDS_Amount + TCS_Amount
-        # Final_Settled = SP - Total_Deductions
-        # Profit = Final_Settled - Cost
-        # Profit = SP - (SP*flat + SP*royalty + (SP*tds_rate/(1+gst_r)) + (SP*gst_r*tcs_rate/(1+gst_r))) - Cost
-        # Profit + Cost = SP * (1 - flat - royalty - (tds_rate/(1+gst_r)) - (gst_r*tcs_rate/(1+gst_r)))
-        # Profit + Cost = SP * (1 - flat - royalty - (tds_rate + gst_r*tcs_rate) / (1+gst_r))
+        
+        # Denominator logic derived from:
+        # Profit = SP * (1 - flat - royalty - (tds_rate + gst_r*tcs_rate) / (1+gst_r)) - Cost
         # SP = (Profit + Cost) / ( (1 - flat - royalty) - (tds_rate + gst_r*tcs_rate) / (1+gst_r) )
         
         denominator = (1 - flat_rate - royalty_r) - ((tds_rate + gst_r * tcs_rate) / (1 + gst_r))
@@ -75,6 +66,7 @@ def to_excel(df, cols_order, highlight_col_name=None):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         
+        # Ensure only columns that exist in the dataframe are used
         final_cols = [col for col in cols_order if col in df.columns]
         df_to_save = df[final_cols].fillna(0)
         df_to_save.to_excel(writer, index=False, sheet_name='Sheet1')
@@ -83,6 +75,8 @@ def to_excel(df, cols_order, highlight_col_name=None):
         
         if highlight_col_name and highlight_col_name in final_cols:
             highlight_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid") # Yellow
+            
+            # Find the column index in the *final* list of columns
             col_index = final_cols.index(highlight_col_name) + 1
             col_letter = get_column_letter(col_index)
             
@@ -103,8 +97,7 @@ flat_rate = st.sidebar.number_input("Flat Deduction (e.g., 0.42)", value=0.42, m
 tds_rate = st.sidebar.number_input("TDS (on Taxable) (e.g., 0.001)", value=0.001, min_value=0.0, max_value=1.0, step=0.001, format="%.3f")
 tcs_rate = st.sidebar.number_input("TCS (on Tax) (e.g., 0.10)", value=0.10, min_value=0.0, max_value=1.0, step=0.01)
 
-# --- (UPDATED) Main App Tabs ---
-# New Order: 1. Bulk Payout, 2. Bulk Price, 3. Single Payout, 4. Single Price
+# --- Main App Tabs ---
 tab1, tab2, tab3, tab4 = st.tabs(["Bulk Payout Checker", "Bulk Price Calculator", "Single Payout Checker", "Single Price Calculator"])
 
 # --- TAB 1: Bulk Payout Checker (Unchanged) ---
@@ -138,7 +131,7 @@ with tab1:
             st.dataframe(df.head(), use_container_width=True)
 
             required_cols = ["Given_Sale_Price", "Product_Cost", "GST_Rate_Percent", "Royalty_Percent"]
-            if not all(col in df.columns for col in df.columns): # Corrected check
+            if not all(col in df.columns for col in required_cols): # Check against required_cols
                 st.error(f"Input file must have columns: {', '.join(required_cols)}")
             else:
                 # 3. Process File
@@ -183,7 +176,7 @@ with tab1:
         )
 
 
-# --- TAB 2: Bulk Price Calculator (Unchanged) ---
+# --- TAB 2: Bulk Price Calculator (MODIFIED) ---
 with tab2:
     st.header("Bulk Price Calculator (Reverse)")
     st.write("Upload file with `Cost` and `Target_Net_Profit` to find the `Required_Sale_Price`.")
@@ -215,7 +208,7 @@ with tab2:
             st.dataframe(df.head(), use_container_width=True)
 
             required_cols = ["Product_Cost", "Target_Net_Profit", "GST_Rate_Percent", "MRP", "Royalty_Percent"]
-            if not all(col in df.columns for col in df.columns): # Corrected check
+            if not all(col in df.columns for col in required_cols): # Check against required_cols
                 st.error(f"Input file must have columns: {', '.join(required_cols)}")
             else:
                 # 3. Process File
@@ -229,24 +222,57 @@ with tab2:
                             sale_prices.append(sp)
                         df["Required_Sale_Price"] = sale_prices
                         
-                        taxable, flat, royalty, tds, tcs, discounts, statuses = [], [], [], [], [], [], []
+                        # --- MODIFICATION: Calculate Net Payout and other details ---
+                        taxable, flat, royalty, tds, tcs, discounts, statuses, net_payouts = [], [], [], [], [], [], [], []
+                        
                         for _, row in df.iterrows():
                             sp, mrp = row["Required_Sale_Price"], row["MRP"]
+                            cost, target_profit = row["Product_Cost"], row["Target_Net_Profit"]
                             gst_r, royalty_r = row["GST_Rate_Percent"] / 100.0, row["Royalty_Percent"] / 100.0
+                            
                             if sp is None or pd.isna(sp):
-                                [arr.append(0) for arr in (taxable, flat, royalty, tds, tcs)]
-                                discounts.append(None); statuses.append("Profit Not Possible")
+                                # Append 0 for all numerical calculation columns
+                                [arr.append(0) for arr in (taxable, flat, royalty, tds, tcs, net_payouts)]
+                                discounts.append(None)
+                                statuses.append("Profit Not Possible")
                                 continue
+                            
+                            # Calculate deduction details
                             taxable_amount, gst_value = sp / (1 + gst_r), sp - (sp / (1 + gst_r))
-                            taxable.append(taxable_amount); flat.append(sp * flat_rate); royalty.append(sp * royalty_r)
-                            tds.append(taxable_amount * tds_rate); tcs.append(gst_value * tcs_rate)
-                            if sp > mrp: statuses.append("Error: Sale Price > MRP"); discounts.append(None)
-                            else: statuses.append("OK"); discounts.append(((mrp - sp) / mrp) * 100)
-
-                        df["Taxable_Amount"] = taxable; df["Flat_Deduction_Amount"] = flat; df["Royalty_Fee_Amount"] = royalty
-                        df["TDS_Amount"] = tds; df["TCS_Amount"] = tcs; df["Discount_Percent"] = discounts; df["Status"] = statuses
+                            taxable.append(taxable_amount)
+                            flat.append(sp * flat_rate)
+                            royalty.append(sp * royalty_r)
+                            tds.append(taxable_amount * tds_rate)
+                            tcs.append(gst_value * tcs_rate)
+                            
+                            # Calculate Net Payout (Final Settled Amount)
+                            # This is simply the cost + target profit
+                            net_payouts.append(cost + target_profit)
+                            
+                            # Check status
+                            if sp > mrp: 
+                                statuses.append("Error: Sale Price > MRP")
+                                discounts.append(None)
+                            else: 
+                                statuses.append("OK")
+                                discounts.append(((mrp - sp) / mrp) * 100)
                         
-                        cols_to_round = ["Required_Sale_Price", "Taxable_Amount", "Flat_Deduction_Amount", "Royalty_Fee_Amount", "TDS_Amount", "TCS_Amount", "Discount_Percent"]
+                        # Add new columns to DataFrame
+                        df["Taxable_Amount"] = taxable
+                        df["Flat_Deduction_Amount"] = flat
+                        df["Royalty_Fee_Amount"] = royalty
+                        df["TDS_Amount"] = tds
+                        df["TCS_Amount"] = tcs
+                        df["Discount_Percent"] = discounts
+                        df["Net_Payout_Amount"] = net_payouts # <-- ADDED
+                        df["Status"] = statuses
+                        
+                        # Add Net_Payout_Amount to rounding list
+                        cols_to_round = [
+                            "Required_Sale_Price", "Taxable_Amount", "Flat_Deduction_Amount", 
+                            "Royalty_Fee_Amount", "TDS_Amount", "TCS_Amount", 
+                            "Discount_Percent", "Net_Payout_Amount"
+                        ]
                         df[cols_to_round] = df[cols_to_round].round(2)
                         
                         st.session_state.processed_price_df = df
@@ -260,10 +286,15 @@ with tab2:
         st.subheader("Step 3: Download Results")
         st.dataframe(st.session_state.processed_price_df.head(), use_container_width=True)
         
+        # --- MODIFIED: Updated column order for export ---
         cols_order = [
             "Product_SKU", "Product_Cost", "Target_Net_Profit", "GST_Rate_Percent", "MRP", "Royalty_Percent",
-            "Required_Sale_Price", "Discount_Percent", "Status", "Taxable_Amount",
-            "Flat_Deduction_Amount", "Royalty_Fee_Amount", "TDS_Amount", "TCS_Amount"
+            "Required_Sale_Price", 
+            "Net_Payout_Amount", # <-- MOVED HERE (as requested)
+            "Discount_Percent", 
+            "Taxable_Amount",
+            "Flat_Deduction_Amount", "Royalty_Fee_Amount", "TDS_Amount", "TCS_Amount",
+            "Status" # <-- Moved to the end
         ]
         
         excel_data = to_excel(st.session_state.processed_price_df, cols_order, highlight_col_name="Required_Sale_Price")
@@ -313,7 +344,7 @@ with tab3:
         else:
             st.error("Calculation Error.")
 
-# --- (NEW) TAB 4: Single Price Calculator ---
+# --- TAB 4: Single Price Calculator (Unchanged) ---
 with tab4:
     st.header("Single Price Calculator (Reverse)")
     st.write("Enter your `Cost` and `Target Profit` to find the `Required Sale Price`.")
@@ -346,7 +377,7 @@ with tab4:
             
             # Primary Metric: Required Sale Price
             st.metric("Required Sale Price", f"₹ {req_sp:,.2f}", 
-                      help="This is the Sale Price (MRP inclusive of all taxes) you need to set.")
+                        help="This is the Sale Price (MRP inclusive of all taxes) you need to set.")
             
             # --- Verification Step ---
             # Re-calculate the payout using the new Sale Price to show details

@@ -111,8 +111,8 @@ with tab1:
             "Product_SKU": ["SKU-001", "SKU-002"],
             "Given_Sale_Price": [1045.00, 1500.00],
             "Product_Cost": [500.00, 750.00],
-            "GST_Rate_Percent": [5, 12],
-            "Royalty_Percent": [10, 0]
+            "GST_Rate_Percent": [5, 5], # MODIFIED: Default 5%
+            # "Royalty_Percent": [10, 0] # REMOVED: Handled by checkbox
         })
         st.download_button(
             label="Download Payout Template",
@@ -123,6 +123,9 @@ with tab1:
 
     # 2. Upload File
     st.subheader("Step 2: Upload and Process File")
+    # ADDED: Royalty Checkbox
+    royalty_10_percent_tab1 = st.checkbox("Apply 10% Royalty?", value=True, key="roy1")
+    
     uploaded_payout_file = st.file_uploader("Upload your Payout Template", type=["xlsx"], key="payout_uploader")
 
     if uploaded_payout_file:
@@ -130,18 +133,22 @@ with tab1:
             df = pd.read_excel(uploaded_payout_file)
             st.dataframe(df.head(), use_container_width=True)
 
-            required_cols = ["Given_Sale_Price", "Product_Cost", "GST_Rate_Percent", "Royalty_Percent"]
+            required_cols = ["Given_Sale_Price", "Product_Cost", "GST_Rate_Percent"] # MODIFIED: Royalty_Percent removed
             if not all(col in df.columns for col in required_cols): # Check against required_cols
                 st.error(f"Input file must have columns: {', '.join(required_cols)}")
             else:
                 # 3. Process File
                 if st.button("Process Payout File", type="primary"):
                     with st.spinner("Calculating..."):
+                        # MODIFIED: Set royalty based on checkbox
+                        royalty_percent = 10.0 if royalty_10_percent_tab1 else 0.0
+                        
                         results_list = []
                         for _, row in df.iterrows():
                             payout_data = calculate_payout(
                                 row["Given_Sale_Price"], row["Product_Cost"], row["GST_Rate_Percent"],
-                                row["Royalty_Percent"], flat_rate, tds_rate, tcs_rate)
+                                royalty_percent, # MODIFIED: Use variable
+                                flat_rate, tds_rate, tcs_rate)
                             results_list.append(payout_data)
 
                         results_df = pd.DataFrame(results_list)
@@ -173,7 +180,8 @@ with tab1:
         st.dataframe(st.session_state.processed_payout_df.head(), use_container_width=True)
         
         cols_order = [
-            "Product_SKU", "Given_Sale_Price", "Product_Cost", "GST_Rate_Percent", "Royalty_Percent",
+            "Product_SKU", "Given_Sale_Price", "Product_Cost", "GST_Rate_Percent", 
+            # "Royalty_Percent", # REMOVED
             "Final_Settled_Amount", "Net_Profit", 
             "Margin_Percent", # Added Margin_Percent
             "Taxable_Amount",
@@ -189,7 +197,7 @@ with tab1:
         )
 
 
-# --- TAB 2: Bulk Price Calculator (Unchanged) ---
+# --- TAB 2: Bulk Price Calculator (MODIFIED) ---
 with tab2:
     st.header("Bulk Price Calculator (Reverse)")
     st.write("Upload file with `Cost` and `Target_Net_Profit` to find the `Required_Sale_Price`.")
@@ -200,9 +208,9 @@ with tab2:
             "Product_SKU": ["SKU-001", "SKU-002"],
             "Product_Cost": [500.00, 750.00],
             "Target_Net_Profit": [100.00, 150.00],
-            "GST_Rate_Percent": [5, 12],
+            "GST_Rate_Percent": [5, 5], # MODIFIED: Default 5%
             "MRP": [1899.00, 2499.00],
-            "Royalty_Percent": [10, 0]
+            # "Royalty_Percent": [10, 0] # REMOVED
         })
         st.download_button(
             label="Download Price Template",
@@ -213,6 +221,9 @@ with tab2:
 
     # 2. Upload File
     st.subheader("Step 2: Upload and Process File")
+    # ADDED: Royalty Checkbox
+    royalty_10_percent_tab2 = st.checkbox("Apply 10% Royalty?", value=True, key="roy2")
+    
     uploaded_price_file = st.file_uploader("Upload your Price Template", type=["xlsx"], key="price_uploader")
 
     if uploaded_price_file:
@@ -220,18 +231,23 @@ with tab2:
             df = pd.read_excel(uploaded_price_file)
             st.dataframe(df.head(), use_container_width=True)
 
-            required_cols = ["Product_Cost", "Target_Net_Profit", "GST_Rate_Percent", "MRP", "Royalty_Percent"]
+            required_cols = ["Product_Cost", "Target_Net_Profit", "GST_Rate_Percent", "MRP"] # MODIFIED: Royalty_Percent removed
             if not all(col in df.columns for col in required_cols): # Check against required_cols
                 st.error(f"Input file must have columns: {', '.join(required_cols)}")
             else:
                 # 3. Process File
                 if st.button("Process Price File", type="primary"):
                     with st.spinner("Calculating..."):
+                        # MODIFIED: Set royalty based on checkbox
+                        royalty_percent = 10.0 if royalty_10_percent_tab2 else 0.0
+                        royalty_r = royalty_percent / 100.0
+                        
                         sale_prices = []
                         for _, row in df.iterrows():
                             sp = calculate_sale_price(
                                 row["Product_Cost"], row["Target_Net_Profit"], row["GST_Rate_Percent"],
-                                row["Royalty_Percent"], flat_rate, tds_rate, tcs_rate)
+                                royalty_percent, # MODIFIED: Use variable
+                                flat_rate, tds_rate, tcs_rate)
                             sale_prices.append(sp)
                         df["Required_Sale_Price"] = sale_prices
                         
@@ -241,7 +257,8 @@ with tab2:
                         for _, row in df.iterrows():
                             sp, mrp = row["Required_Sale_Price"], row["MRP"]
                             cost, target_profit = row["Product_Cost"], row["Target_Net_Profit"]
-                            gst_r, royalty_r = row["GST_Rate_Percent"] / 100.0, row["Royalty_Percent"] / 100.0
+                            gst_r = row["GST_Rate_Percent"] / 100.0
+                            # royalty_r is already set above
                             
                             if sp is None or pd.isna(sp):
                                 # Append 0 for all numerical calculation columns
@@ -254,7 +271,7 @@ with tab2:
                             taxable_amount, gst_value = sp / (1 + gst_r), sp - (sp / (1 + gst_r))
                             taxable.append(taxable_amount)
                             flat.append(sp * flat_rate)
-                            royalty.append(sp * royalty_r)
+                            royalty.append(sp * royalty_r) # MODIFIED: Use variable
                             tds.append(taxable_amount * tds_rate)
                             tcs.append(gst_value * tcs_rate)
                             
@@ -316,7 +333,7 @@ with tab2:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
-# --- TAB 3: Single Payout Checker (Unchanged) ---
+# --- TAB 3: Single Payout Checker (MODIFIED) ---
 with tab3:
     st.header("Single Payout Checker (Forward)")
     st.write("Enter a `Sale Price` to see your `Net Profit` and all deductions.")
@@ -327,12 +344,18 @@ with tab3:
             sp_entry = st.number_input("Given Sale Price (₹)", min_value=0.0, step=1.0)
             pc_entry = st.number_input("Product Cost (₹)", min_value=0.0, step=1.0)
         with col2:
-            gst_entry = st.number_input("GST Rate (%)", min_value=0.0, step=1.0)
-            roy_entry = st.number_input("Royalty (%)", min_value=0.0, value=0.0, step=1.0)
+            # MODIFIED: Default value 5.0
+            gst_entry = st.number_input("GST Rate (%)", min_value=0.0, step=1.0, value=5.0) 
+            # MODIFIED: Replaced with checkbox
+            roy_10_check_tab3 = st.checkbox("Apply 10% Royalty?", value=True, key="roy3")
+            # roy_entry = st.number_input("Royalty (%)", min_value=0.0, value=0.0, step=1.0)
         
         submitted = st.form_submit_button("Calculate Payout", type="primary")
 
     if submitted:
+        # MODIFIED: Set royalty based on checkbox
+        roy_entry = 10.0 if roy_10_check_tab3 else 0.0
+        
         results = calculate_payout(sp_entry, pc_entry, gst_entry, roy_entry, flat_rate, tds_rate, tcs_rate)
         
         if results:
@@ -355,7 +378,7 @@ with tab3:
         else:
             st.error("Calculation Error.")
 
-# --- TAB 4: Single Price Calculator (Unchanged) ---
+# --- TAB 4: Single Price Calculator (MODIFIED) ---
 with tab4:
     st.header("Single Price Calculator (Reverse)")
     st.write("Enter your `Cost` and `Target Profit` to find the `Required Sale Price`.")
@@ -366,18 +389,24 @@ with tab4:
             pc_price_entry = st.number_input("Product Cost (₹)", min_value=0.0, step=1.0, key="sp_pc")
             profit_price_entry = st.number_input("Target Net Profit (₹)", min_value=0.0, step=1.0, key="sp_profit")
         with col2:
-            gst_price_entry = st.number_input("GST Rate (%)", min_value=0.0, step=1.0, key="sp_gst")
-            roy_price_entry = st.number_input("Royalty (%)", min_value=0.0, value=0.0, step=1.0, key="sp_roy")
+            # MODIFIED: Default value 5.0
+            gst_price_entry = st.number_input("GST Rate (%)", min_value=0.0, step=1.0, key="sp_gst", value=5.0)
+            # MODIFIED: Replaced with checkbox
+            roy_10_check_tab4 = st.checkbox("Apply 10% Royalty?", value=True, key="roy4")
+            # roy_price_entry = st.number_input("Royalty (%)", min_value=0.0, value=0.0, step=1.0, key="sp_roy")
         
         submitted_price = st.form_submit_button("Calculate Price", type="primary")
 
     if submitted_price:
+        # MODIFIED: Set royalty based on checkbox
+        roy_price_entry = 10.0 if roy_10_check_tab4 else 0.0
+        
         # Calculate the required sale price
         req_sp = calculate_sale_price(
             pc_price_entry, 
             profit_price_entry, 
             gst_price_entry, 
-            roy_price_entry, 
+            roy_price_entry, # MODIFIED: Use variable
             flat_rate, 
             tds_rate, 
             tcs_rate
@@ -396,7 +425,7 @@ with tab4:
                 req_sp, 
                 pc_price_entry, 
                 gst_price_entry, 
-                roy_price_entry, 
+                roy_price_entry, # MODIFIED: Use variable
                 flat_rate, 
                 tds_rate, 
                 tcs_rate

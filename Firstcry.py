@@ -286,15 +286,13 @@ with tab2:
         st.subheader("Step 3: Download Results")
         st.dataframe(st.session_state.processed_price_df.head(), use_container_width=True)
         
-        # --- MODIFIED: Updated column order for export ---
+        # --- MODIFIED: Updated column order for export based on your request ---
         cols_order = [
-            "Product_SKU", "Product_Cost", "Target_Net_Profit", "GST_Rate_Percent", "MRP", "Royalty_Percent",
+            "Product_SKU",
+            "MRP",
             "Required_Sale_Price", 
-            "Net_Payout_Amount", # <-- MOVED HERE (as requested)
-            "Discount_Percent", 
-            "Taxable_Amount",
-            "Flat_Deduction_Amount", "Royalty_Fee_Amount", "TDS_Amount", "TCS_Amount",
-            "Status" # <-- Moved to the end
+            "Net_Payout_Amount",
+            "Status"
         ]
         
         excel_data = to_excel(st.session_state.processed_price_df, cols_order, highlight_col_name="Required_Sale_Price")
@@ -411,3 +409,4 @@ with tab4:
         else:
             st.error("Calculation Error: Profit Not Possible.")
             st.write("This usually means the deductions (Flat rate, Royalty, etc.) are too high, making the target profit impossible to achieve.")
+

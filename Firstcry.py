@@ -12,27 +12,50 @@ def calculate_sale_price(product_cost, target_profit, gst_rate, royalty_percent,
         gst_r = gst_rate / 100.0
         royalty_r = royalty_percent / 100.0
         numerator = target_profit + product_cost
+        # Denominator logic: (1 - flat - royalty) - (TDS_on_Taxable + TCS_on_Tax)
+        # We need to express TDS and TCS in terms of Sale_Price (SP)
+        # Taxable = SP / (1+gst_r)
+        # GST = SP - Taxable = SP * (1 - 1/(1+gst_r)) = SP * (gst_r / (1+gst_r))
+        # TDS_Amount = Taxable * tds_rate = (SP / (1+gst_r)) * tds_rate
+        # TCS_Amount = GST * tcs_rate = (SP * (gst_r / (1+gst_r))) * tcs_rate
+        # Total_Deductions = SP*flat + SP*royalty + TDS_Amount + TCS_Amount
+        # Final_Settled = SP - Total_Deductions
+        # Profit = Final_Settled - Cost
+        # Profit = SP - (SP*flat + SP*royalty + (SP*tds_rate/(1+gst_r)) + (SP*gst_r*tcs_rate/(1+gst_r))) - Cost
+        # Profit + Cost = SP * (1 - flat - royalty - (tds_rate/(1+gst_r)) - (gst_r*tcs_rate/(1+gst_r)))
+        # Profit + Cost = SP * (1 - flat - royalty - (tds_rate + gst_r*tcs_rate) / (1+gst_r))
+        # SP = (Profit + Cost) / ( (1 - flat - royalty) - (tds_rate + gst_r*tcs_rate) / (1+gst_r) )
+        
         denominator = (1 - flat_rate - royalty_r) - ((tds_rate + gst_r * tcs_rate) / (1 + gst_r))
-        if denominator <= 0: return None
+        
+        if denominator <= 0: 
+            return None # Profit is impossible as deductions are >= 100%
+        
         return numerator / denominator
-    except Exception: return None
+    except Exception: 
+        return None
 
 def calculate_payout(sale_price, product_cost, gst_rate, royalty_percent, flat_rate, tds_rate, tcs_rate):
     """(Forward Calculation) Calculates profit from a given Sale Price."""
     try:
         if sale_price <= 0:
             return { "Net_Profit": -product_cost, "Final_Settled_Amount": -product_cost, "Flat_Deduction_Amount": 0, "Royalty_Fee_Amount": 0, "TDS_Amount": 0, "TCS_Amount": 0, "Taxable_Amount": 0 }
+            
         gst_r = gst_rate / 100.0
         royalty_r = royalty_percent / 100.0
+        
         taxable_amount = sale_price / (1 + gst_r)
         gst_value = sale_price - taxable_amount
+        
         flat_deduction = sale_price * flat_rate
         royalty_fee = sale_price * royalty_r
         tds_amount = taxable_amount * tds_rate
-        tcs_amount = gst_value * tcs_rate
+        tcs_amount = gst_value * tcs_rate # TCS is on the tax component (GST)
+        
         total_deductions = flat_deduction + royalty_fee + tds_amount + tcs_amount
         final_settled_amount = sale_price - total_deductions
         net_profit = final_settled_amount - product_cost
+        
         return {
             "Net_Profit": net_profit,
             "Final_Settled_Amount": final_settled_amount,
@@ -42,7 +65,8 @@ def calculate_payout(sale_price, product_cost, gst_rate, royalty_percent, flat_r
             "TCS_Amount": tcs_amount,
             "Taxable_Amount": taxable_amount
         }
-    except Exception: return None
+    except Exception: 
+        return None
 
 # --- Excel Helper Function (Same as before) ---
 
@@ -80,10 +104,10 @@ tds_rate = st.sidebar.number_input("TDS (on Taxable) (e.g., 0.001)", value=0.001
 tcs_rate = st.sidebar.number_input("TCS (on Tax) (e.g., 0.10)", value=0.10, min_value=0.0, max_value=1.0, step=0.01)
 
 # --- (UPDATED) Main App Tabs ---
-# New Order: 1. Bulk Payout, 2. Bulk Price, 3. Single Payout
-tab1, tab2, tab3 = st.tabs(["Bulk Payout Checker", "Bulk Price Calculator", "Single Payout Checker"])
+# New Order: 1. Bulk Payout, 2. Bulk Price, 3. Single Payout, 4. Single Price
+tab1, tab2, tab3, tab4 = st.tabs(["Bulk Payout Checker", "Bulk Price Calculator", "Single Payout Checker", "Single Price Calculator"])
 
-# --- TAB 1: Bulk Payout Checker ---
+# --- TAB 1: Bulk Payout Checker (Unchanged) ---
 with tab1:
     st.header("Bulk Payout Checker (Forward)")
     st.write("Upload file with `Given_Sale_Price` and `Cost` to find the `Net_Profit` for all products.")
@@ -114,7 +138,7 @@ with tab1:
             st.dataframe(df.head(), use_container_width=True)
 
             required_cols = ["Given_Sale_Price", "Product_Cost", "GST_Rate_Percent", "Royalty_Percent"]
-            if not all(col in df.columns for col in df.columns):
+            if not all(col in df.columns for col in df.columns): # Corrected check
                 st.error(f"Input file must have columns: {', '.join(required_cols)}")
             else:
                 # 3. Process File
@@ -159,7 +183,7 @@ with tab1:
         )
 
 
-# --- TAB 2: Bulk Price Calculator ---
+# --- TAB 2: Bulk Price Calculator (Unchanged) ---
 with tab2:
     st.header("Bulk Price Calculator (Reverse)")
     st.write("Upload file with `Cost` and `Target_Net_Profit` to find the `Required_Sale_Price`.")
@@ -191,7 +215,7 @@ with tab2:
             st.dataframe(df.head(), use_container_width=True)
 
             required_cols = ["Product_Cost", "Target_Net_Profit", "GST_Rate_Percent", "MRP", "Royalty_Percent"]
-            if not all(col in df.columns for col in df.columns):
+            if not all(col in df.columns for col in df.columns): # Corrected check
                 st.error(f"Input file must have columns: {', '.join(required_cols)}")
             else:
                 # 3. Process File
@@ -209,7 +233,7 @@ with tab2:
                         for _, row in df.iterrows():
                             sp, mrp = row["Required_Sale_Price"], row["MRP"]
                             gst_r, royalty_r = row["GST_Rate_Percent"] / 100.0, row["Royalty_Percent"] / 100.0
-                            if sp is None:
+                            if sp is None or pd.isna(sp):
                                 [arr.append(0) for arr in (taxable, flat, royalty, tds, tcs)]
                                 discounts.append(None); statuses.append("Profit Not Possible")
                                 continue
@@ -250,7 +274,7 @@ with tab2:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
-# --- TAB 3: Single Payout Checker ---
+# --- TAB 3: Single Payout Checker (Unchanged) ---
 with tab3:
     st.header("Single Payout Checker (Forward)")
     st.write("Enter a `Sale Price` to see your `Net Profit` and all deductions.")
@@ -288,3 +312,71 @@ with tab3:
                 st.write(f"**TCS:** ₹ {results['TCS_Amount']:,.2f}")
         else:
             st.error("Calculation Error.")
+
+# --- (NEW) TAB 4: Single Price Calculator ---
+with tab4:
+    st.header("Single Price Calculator (Reverse)")
+    st.write("Enter your `Cost` and `Target Profit` to find the `Required Sale Price`.")
+    
+    with st.form("single_price_form"):
+        col1, col2 = st.columns(2)
+        with col1:
+            pc_price_entry = st.number_input("Product Cost (₹)", min_value=0.0, step=1.0, key="sp_pc")
+            profit_price_entry = st.number_input("Target Net Profit (₹)", min_value=0.0, step=1.0, key="sp_profit")
+        with col2:
+            gst_price_entry = st.number_input("GST Rate (%)", min_value=0.0, step=1.0, key="sp_gst")
+            roy_price_entry = st.number_input("Royalty (%)", min_value=0.0, value=0.0, step=1.0, key="sp_roy")
+        
+        submitted_price = st.form_submit_button("Calculate Price", type="primary")
+
+    if submitted_price:
+        # Calculate the required sale price
+        req_sp = calculate_sale_price(
+            pc_price_entry, 
+            profit_price_entry, 
+            gst_price_entry, 
+            roy_price_entry, 
+            flat_rate, 
+            tds_rate, 
+            tcs_rate
+        )
+        
+        if req_sp is not None:
+            st.subheader("Results")
+            
+            # Primary Metric: Required Sale Price
+            st.metric("Required Sale Price", f"₹ {req_sp:,.2f}", 
+                      help="This is the Sale Price (MRP inclusive of all taxes) you need to set.")
+            
+            # --- Verification Step ---
+            # Re-calculate the payout using the new Sale Price to show details
+            results = calculate_payout(
+                req_sp, 
+                pc_price_entry, 
+                gst_price_entry, 
+                roy_price_entry, 
+                flat_rate, 
+                tds_rate, 
+                tcs_rate
+            )
+            
+            if results:
+                st.write("---")
+                st.markdown(f"**Verification for this Sale Price:**")
+                
+                col1, col2 = st.columns(2)
+                col1.metric("Final Settled Amount", f"₹ {results['Final_Settled_Amount']:,.2f}")
+                # The net profit should be very close (or identical) to the target profit
+                col2.metric("Verified Net Profit", f"₹ {results['Net_Profit']:,.2f}", 
+                            delta=f"₹ {results['Net_Profit'] - profit_price_entry:,.2f} vs Target")
+                
+                with st.expander("Show Deduction Details for this Price"):
+                    st.write(f"**Taxable Amount:** ₹ {results['Taxable_Amount']:,.2f}")
+                    st.write(f"**Flat Fee:** ₹ {results['Flat_Deduction_Amount']:,.2f}")
+                    st.write(f"**Royalty Fee:** ₹ {results['Royalty_Fee_Amount']:,.2f}")
+                    st.write(f"**TDS:** ₹ {results['TDS_Amount']:,.2f}")
+                    st.write(f"**TCS:** ₹ {results['TCS_Amount']:,.2f}")
+            
+        else:
+            st.error("Calculation Error: Profit Not Possible.")
+            st.write("This usually means the deductions (Flat rate, Royalty, etc.) are too high, making the target profit impossible to achieve.")

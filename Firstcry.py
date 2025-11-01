@@ -264,7 +264,8 @@ with tab2:
                             tds.append(taxable_amount * tds_rate)
                             tcs.append(gst_value * tcs_rate)
                             
-                            net_payouts.append(cost + target_profit)
+                            # --- MODIFIED: This is the total cost (Cost + Target Profit) ---
+                            net_payouts.append(cost + target_profit) 
                             
                             if sp > mrp: 
                                 statuses.append("Error: Sale Price > MRP")
@@ -282,13 +283,15 @@ with tab2:
                         df["TDS_Amount"] = tds
                         df["TCS_Amount"] = tcs
                         df["Discount_Percent"] = discounts
-                        df["Net_Payout_Amount"] = net_payouts 
+                        # --- MODIFIED: Renamed column to "Cost" ---
+                        df["Cost"] = net_payouts 
                         df["Status"] = statuses
                         
+                        # --- MODIFIED: Renamed "Net_Payout_Amount" to "Cost" in rounding list ---
                         cols_to_round = [
                             "Required_Sale_Price", "Taxable_Amount", "Flat_Deduction_Amount", 
                             "Royalty_Fee_Amount", "TDS_Amount", "TCS_Amount", 
-                            "Discount_Percent", "Net_Payout_Amount"
+                            "Discount_Percent", "Cost"
                         ]
                         existing_cols_to_round = [col for col in cols_to_round if col in df.columns]
                         df[existing_cols_to_round] = df[existing_cols_to_round].round(2)
@@ -308,9 +311,9 @@ with tab2:
             "Product_SKU",
             "MRP",
             "Required_Sale_Price", 
-            "Product_Cost",         # <-- ADDED
-            "Target_Net_Profit",    # <-- ADDED
-            "Net_Payout_Amount",
+            "Cost",         # <-- Renamed from Net_Payout_Amount
+            # "Product_Cost" (Removed)
+            # "Target_Net_Profit" (Removed)
             # "Status" (Removed)
         ]
         

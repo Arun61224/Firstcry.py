@@ -101,7 +101,7 @@ tcs_rate = st.sidebar.number_input("TCS (on Tax) (e.g., 0.10)", value=0.10, min_
 # --- Main App Tabs ---
 tab1, tab2, tab3, tab4 = st.tabs(["Bulk Payout Checker", "Bulk Price Calculator", "Single Payout Checker", "Single Price Calculator"])
 
-# --- TAB 1: Bulk Payout Checker (MODIFIED) ---
+# --- TAB 1: Bulk Payout Checker (Same as before) ---
 with tab1:
     st.header("Bulk Payout Checker (Forward)")
     st.write("Upload file with `Given_Sale_Price` and `Cost` to find the `Net_Profit` and `Margin_Percent` for all products.")
@@ -153,19 +153,16 @@ with tab1:
                         results_df = pd.DataFrame(results_list)
                         df = df.join(results_df)
                         
-                        # --- ADDED: Calculate Margin ---
                         df["Margin_Percent"] = df.apply(
                             lambda row: (row["Net_Profit"] / row["Final_Settled_Amount"]) * 100 if row["Final_Settled_Amount"] > 0 else 0,
                             axis=1
                         )
-                        # --- END ADDED ---
                         
                         cols_to_round = [
                             "Final_Settled_Amount", "Net_Profit", "Taxable_Amount", 
                             "Flat_Deduction_Amount", "Royalty_Fee_Amount", "TDS_Amount", "TCS_Amount",
-                            "Margin_Percent" # Added Margin_Percent
+                            "Margin_Percent"
                         ]
-                        # Round only columns that exist
                         existing_cols_to_round = [col for col in cols_to_round if col in df.columns]
                         df[existing_cols_to_round] = df[existing_cols_to_round].round(2)
                         
@@ -179,7 +176,6 @@ with tab1:
     if "processed_payout_df" in st.session_state:
         st.subheader("Step 3: Download Results")
         
-        # --- MODIFIED: Column list for output file/preview is now minimal ---
         cols_order = [
             "Product_SKU", 
             "Given_Sale_Price", 
@@ -187,12 +183,9 @@ with tab1:
             "Final_Settled_Amount"
         ]
         
-        # --- MODIFIED: Show only minimal columns in the preview dataframe ---
         cols_to_show = [col for col in cols_order if col in st.session_state.processed_payout_df.columns]
         st.dataframe(st.session_state.processed_payout_df[cols_to_show].head(), use_container_width=True)
         
-        
-        # --- MODIFIED: Highlighting Net_Profit (removed) changed to Final_Settled_Amount ---
         excel_data = to_excel(st.session_state.processed_payout_df, cols_order, highlight_col_name="Final_Settled_Amount")
         st.download_button(
             label="Download Payout Results (Highlighted)",
@@ -209,7 +202,6 @@ with tab2:
 
     # 1. Download Template
     with st.expander("Step 1: Download Price Template"):
-        # --- MODIFIED: Reordered MRP to column B ---
         price_template_df = pd.DataFrame({
             "Product_SKU": ["SKU-001", "SKU-002"],
             "MRP": [1899.00, 2499.00],
@@ -234,7 +226,6 @@ with tab2:
             df = pd.read_excel(uploaded_price_file)
             st.dataframe(df.head(), use_container_width=True)
 
-            # MODIFIED: Removed GST_Rate_Percent
             required_cols = ["Product_Cost", "Target_Net_Profit", "MRP", "Royalty_Percent"] 
             if not all(col in df.columns for col in required_cols): # Check against required_cols
                 st.error(f"Input file must have columns: {', '.join(required_cols)}")
@@ -245,7 +236,6 @@ with tab2:
                         
                         sale_prices = []
                         for _, row in df.iterrows():
-                            # MODIFIED: Removed GST_Rate_Percent from call
                             sp = calculate_sale_price(
                                 row["Product_Cost"], row["Target_Net_Profit"], 
                                 row["Royalty_Percent"],
@@ -253,23 +243,20 @@ with tab2:
                             sale_prices.append(sp)
                         df["Required_Sale_Price"] = sale_prices
                         
-                        # --- MODIFICATION: Calculate Net Payout and other details ---
                         taxable, flat, royalty, tds, tcs, discounts, statuses, net_payouts = [], [], [], [], [], [], [], []
                         
                         for _, row in df.iterrows():
                             sp, mrp = row["Required_Sale_Price"], row["MRP"]
                             cost, target_profit = row["Product_Cost"], row["Target_Net_Profit"]
-                            gst_r = 0.05 # MODIFIED: Hardcoded GST 5%
+                            gst_r = 0.05 
                             royalty_r = row["Royalty_Percent"] / 100.0 
                             
                             if sp is None or pd.isna(sp):
-                                # Append 0 for all numerical calculation columns
                                 [arr.append(0) for arr in (taxable, flat, royalty, tds, tcs, net_payouts)]
                                 discounts.append(None)
                                 statuses.append("Profit Not Possible")
                                 continue
                             
-                            # Calculate deduction details
                             taxable_amount, gst_value = sp / (1 + gst_r), sp - (sp / (1 + gst_r))
                             taxable.append(taxable_amount)
                             flat.append(sp * flat_rate)
@@ -277,38 +264,32 @@ with tab2:
                             tds.append(taxable_amount * tds_rate)
                             tcs.append(gst_value * tcs_rate)
                             
-                            # Calculate Net Payout (Final Settled Amount)
-                            # This is simply the cost + target profit
                             net_payouts.append(cost + target_profit)
                             
-                            # Check status
                             if sp > mrp: 
                                 statuses.append("Error: Sale Price > MRP")
                                 discounts.append(None)
                             else: 
                                 statuses.append("OK")
-                                if mrp > 0: # Avoid division by zero
+                                if mrp > 0: 
                                     discounts.append(((mrp - sp) / mrp) * 100)
                                 else:
                                     discounts.append(0)
                         
-                        # Add new columns to DataFrame
                         df["Taxable_Amount"] = taxable
                         df["Flat_Deduction_Amount"] = flat
                         df["Royalty_Fee_Amount"] = royalty
                         df["TDS_Amount"] = tds
                         df["TCS_Amount"] = tcs
                         df["Discount_Percent"] = discounts
-                        df["Net_Payout_Amount"] = net_payouts # <-- ADDED
+                        df["Net_Payout_Amount"] = net_payouts 
                         df["Status"] = statuses
                         
-                        # Add Net_Payout_Amount to rounding list
                         cols_to_round = [
                             "Required_Sale_Price", "Taxable_Amount", "Flat_Deduction_Amount", 
                             "Royalty_Fee_Amount", "TDS_Amount", "TCS_Amount", 
                             "Discount_Percent", "Net_Payout_Amount"
                         ]
-                        # Round only columns that exist
                         existing_cols_to_round = [col for col in cols_to_round if col in df.columns]
                         df[existing_cols_to_round] = df[existing_cols_to_round].round(2)
                         
@@ -322,13 +303,15 @@ with tab2:
     if "processed_price_df" in st.session_state:
         st.subheader("Step 3: Download Results")
         
-        # --- MODIFIED: Updated column order for export/preview based on your request ---
+        # --- MODIFIED: Column order changed as per your request ---
         cols_order = [
             "Product_SKU",
             "MRP",
             "Required_Sale_Price", 
+            "Product_Cost",         # <-- ADDED
+            "Target_Net_Profit",    # <-- ADDED
             "Net_Payout_Amount",
-            "Status"
+            # "Status" (Removed)
         ]
         
         # --- MODIFIED: Show only minimal columns in the preview dataframe ---
@@ -344,7 +327,7 @@ with tab2:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
-# --- TAB 3: Single Payout Checker (MODIFIED) ---
+# --- TAB 3: Single Payout Checker (Same as before) ---
 with tab3:
     st.header("Single Payout Checker (Forward)")
     st.write("Enter a `Sale Price` to see your `Net Profit` and all deductions.")
@@ -355,15 +338,13 @@ with tab3:
             sp_entry = st.number_input("Given Sale Price (₹)", min_value=0.0, step=1.0)
             pc_entry = st.number_input("Product Cost (₹)", min_value=0.0, step=1.0)
         with col2:
-            # MODIFIED: Removed GST input
             roy_entry = st.number_input("Royalty (%)", min_value=0.0, value=0.0, step=1.0)
-            st.write("GST fixed at 5%") # Placeholder
+            st.write("GST fixed at 5%") 
         
         submitted = st.form_submit_button("Calculate Payout", type="primary")
 
     if submitted:
         
-        # MODIFIED: Removed GST from call
         results = calculate_payout(sp_entry, pc_entry, roy_entry, flat_rate, tds_rate, tcs_rate)
         
         if results:
@@ -386,7 +367,7 @@ with tab3:
         else:
             st.error("Calculation Error.")
 
-# --- TAB 4: Single Price Calculator (MODIFIED) ---
+# --- TAB 4: Single Price Calculator (Same as before) ---
 with tab4:
     st.header("Single Price Calculator (Reverse)")
     st.write("Enter your `Cost` and `Target Profit` to find the `Required Sale Price`.")
@@ -397,16 +378,13 @@ with tab4:
             pc_price_entry = st.number_input("Product Cost (₹)", min_value=0.0, step=1.0, key="sp_pc")
             profit_price_entry = st.number_input("Target Net Profit (₹)", min_value=0.0, step=1.0, key="sp_profit")
         with col2:
-            # MODIFIED: Removed GST input
             roy_price_entry = st.number_input("Royalty (%)", min_value=0.0, value=0.0, step=1.0, key="sp_roy")
-            st.write("GST fixed at 5%") # Placeholder
+            st.write("GST fixed at 5%") 
         
         submitted_price = st.form_submit_button("Calculate Price", type="primary")
 
     if submitted_price:
         
-        # Calculate the required sale price
-        # MODIFIED: Removed GST from call
         req_sp = calculate_sale_price(
             pc_price_entry, 
             profit_price_entry, 
@@ -419,13 +397,9 @@ with tab4:
         if req_sp is not None:
             st.subheader("Results")
             
-            # Primary Metric: Required Sale Price
             st.metric("Required Sale Price", f"₹ {req_sp:,.2f}", 
                         help="This is the Sale Price (MRP inclusive of all taxes) you need to set.")
             
-            # --- Verification Step ---
-            # Re-calculate the payout using the new Sale Price to show details
-            # MODIFIED: Removed GST from call
             results = calculate_payout(
                 req_sp, 
                 pc_price_entry, 
@@ -441,7 +415,6 @@ with tab4:
                 
                 col1, col2 = st.columns(2)
                 col1.metric("Final Settled Amount", f"₹ {results['Final_Settled_Amount']:,.2f}")
-                # The net profit should be very close (or identical) to the target profit
                 col2.metric("Verified Net Profit", f"₹ {results['Net_Profit']:,.2f}", 
                             delta=f"₹ {results['Net_Profit'] - profit_price_entry:,.2f} vs Target")
                 

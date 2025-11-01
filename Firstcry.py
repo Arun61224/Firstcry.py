@@ -165,7 +165,9 @@ with tab1:
                             "Flat_Deduction_Amount", "Royalty_Fee_Amount", "TDS_Amount", "TCS_Amount",
                             "Margin_Percent" # Added Margin_Percent
                         ]
-                        df[cols_to_round] = df[cols_to_round].round(2)
+                        # Round only columns that exist
+                        existing_cols_to_round = [col for col in cols_to_round if col in df.columns]
+                        df[existing_cols_to_round] = df[existing_cols_to_round].round(2)
                         
                         st.session_state.processed_payout_df = df
                         st.success(f"Processing Complete! {len(df)} products processed.")
@@ -178,16 +180,16 @@ with tab1:
         st.subheader("Step 3: Download Results")
         st.dataframe(st.session_state.processed_payout_df.head(), use_container_width=True)
         
+        # --- MODIFIED: Column list for output file is now minimal ---
         cols_order = [
-            "Product_SKU", "Given_Sale_Price", "Product_Cost", "GST_Rate_Percent", 
-            "Royalty_Percent", # REVERTED
-            "Final_Settled_Amount", "Net_Profit", 
-            "Margin_Percent", # Added Margin_Percent
-            "Taxable_Amount",
-            "Flat_Deduction_Amount", "Royalty_Fee_Amount", "TDS_Amount", "TCS_Amount"
+            "Product_SKU", 
+            "Given_Sale_Price", 
+            "Product_Cost", 
+            "Final_Settled_Amount"
         ]
         
-        excel_data = to_excel(st.session_state.processed_payout_df, cols_order, highlight_col_name="Net_Profit")
+        # --- MODIFIED: Highlighting Net_Profit (removed) changed to Final_Settled_Amount ---
+        excel_data = to_excel(st.session_state.processed_payout_df, cols_order, highlight_col_name="Final_Settled_Amount")
         st.download_button(
             label="Download Payout Results (Highlighted)",
             data=excel_data,
@@ -300,7 +302,9 @@ with tab2:
                             "Royalty_Fee_Amount", "TDS_Amount", "TCS_Amount", 
                             "Discount_Percent", "Net_Payout_Amount"
                         ]
-                        df[cols_to_round] = df[cols_to_round].round(2)
+                        # Round only columns that exist
+                        existing_cols_to_round = [col for col in cols_to_round if col in df.columns]
+                        df[existing_cols_to_round] = df[existing_cols_to_round].round(2)
                         
                         st.session_state.processed_price_df = df
                         st.success(f"Processing Complete! {len(df)} products processed.")
@@ -448,4 +452,3 @@ with tab4:
         else:
             st.error("Calculation Error: Profit Not Possible.")
             st.write("This usually means the deductions (Flat rate, Royalty, etc.) are too high, making the target profit impossible to achieve.")
-

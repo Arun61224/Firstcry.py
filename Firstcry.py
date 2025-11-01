@@ -11,6 +11,7 @@ def calculate_sale_price(product_cost, target_profit, royalty_percent, flat_rate
     try:
         gst_r = 0.05 # GST hardcoded to 5%
         royalty_r = royalty_percent / 100.0
+        # MODIFIED: target_profit is now read from "Margin" column
         numerator = target_profit + product_cost
         
         # Denominator logic derived from:
@@ -198,15 +199,16 @@ with tab1:
 # --- TAB 2: Bulk Price Calculator (MODIFIED) ---
 with tab2:
     st.header("Bulk Price Calculator (Reverse)")
-    st.write("Upload file with `Cost` and `Target_Net_Profit` to find the `Required_Sale_Price`.")
+    st.write("Upload file with `Cost` and `Margin` to find the `Required_Sale_Price`.") # MODIFIED text
 
     # 1. Download Template
     with st.expander("Step 1: Download Price Template"):
+        # --- MODIFIED: Renamed "Target_Net_Profit" to "Margin" ---
         price_template_df = pd.DataFrame({
             "Product_SKU": ["SKU-001", "SKU-002"],
             "MRP": [1899.00, 2499.00],
             "Product_Cost": [500.00, 750.00],
-            "Target_Net_Profit": [100.00, 150.00],
+            "Margin": [100.00, 150.00], # RENAMED
             "Royalty_Percent": [10, 0] 
         })
         st.download_button(
@@ -226,7 +228,8 @@ with tab2:
             df = pd.read_excel(uploaded_price_file)
             st.dataframe(df.head(), use_container_width=True)
 
-            required_cols = ["Product_Cost", "Target_Net_Profit", "MRP", "Royalty_Percent"] 
+            # --- MODIFIED: Renamed "Target_Net_Profit" to "Margin" ---
+            required_cols = ["Product_Cost", "Margin", "MRP", "Royalty_Percent"] 
             if not all(col in df.columns for col in required_cols): # Check against required_cols
                 st.error(f"Input file must have columns: {', '.join(required_cols)}")
             else:
@@ -236,8 +239,9 @@ with tab2:
                         
                         sale_prices = []
                         for _, row in df.iterrows():
+                            # --- MODIFIED: Renamed "Target_Net_Profit" to "Margin" ---
                             sp = calculate_sale_price(
-                                row["Product_Cost"], row["Target_Net_Profit"], 
+                                row["Product_Cost"], row["Margin"], 
                                 row["Royalty_Percent"],
                                 flat_rate, tds_rate, tcs_rate)
                             sale_prices.append(sp)
@@ -247,7 +251,8 @@ with tab2:
                         
                         for _, row in df.iterrows():
                             sp, mrp = row["Required_Sale_Price"], row["MRP"]
-                            cost, target_profit = row["Product_Cost"], row["Target_Net_Profit"]
+                            # --- MODIFIED: Renamed "Target_Net_Profit" to "Margin" ---
+                            cost, target_profit = row["Product_Cost"], row["Margin"]
                             gst_r = 0.05 
                             royalty_r = row["Royalty_Percent"] / 100.0 
                             
@@ -370,16 +375,18 @@ with tab3:
         else:
             st.error("Calculation Error.")
 
-# --- TAB 4: Single Price Calculator (Same as before) ---
+# --- TAB 4: Single Price Calculator (MODIFIED) ---
 with tab4:
     st.header("Single Price Calculator (Reverse)")
-    st.write("Enter your `Cost` and `Target Profit` to find the `Required Sale Price`.")
+    # --- MODIFIED: Renamed "Target Profit" to "Margin" ---
+    st.write("Enter your `Cost` and `Margin` to find the `Required Sale Price`.")
     
     with st.form("single_price_form"):
         col1, col2 = st.columns(2)
         with col1:
             pc_price_entry = st.number_input("Product Cost (₹)", min_value=0.0, step=1.0, key="sp_pc")
-            profit_price_entry = st.number_input("Target Net Profit (₹)", min_value=0.0, step=1.0, key="sp_profit")
+            # --- MODIFIED: Renamed label to "Margin" ---
+            profit_price_entry = st.number_input("Margin (₹)", min_value=0.0, step=1.0, key="sp_profit")
         with col2:
             roy_price_entry = st.number_input("Royalty (%)", min_value=0.0, value=0.0, step=1.0, key="sp_roy")
             st.write("GST fixed at 5%") 
@@ -418,8 +425,9 @@ with tab4:
                 
                 col1, col2 = st.columns(2)
                 col1.metric("Final Settled Amount", f"₹ {results['Final_Settled_Amount']:,.2f}")
+                # --- MODIFIED: Renamed label to "Verified Net Profit" and delta to "vs Margin" ---
                 col2.metric("Verified Net Profit", f"₹ {results['Net_Profit']:,.2f}", 
-                            delta=f"₹ {results['Net_Profit'] - profit_price_entry:,.2f} vs Target")
+                            delta=f"₹ {results['Net_Profit'] - profit_price_entry:,.2f} vs Margin")
                 
                 with st.expander("Show Deduction Details for this Price"):
                     st.write(f"**Taxable Amount:** ₹ {results['Taxable_Amount']:,.2f}")

@@ -209,12 +209,12 @@ with tab2:
 
     # 1. Download Template
     with st.expander("Step 1: Download Price Template"):
-        # MODIFIED: Removed GST_Rate_Percent
+        # --- MODIFIED: Reordered MRP to column B ---
         price_template_df = pd.DataFrame({
             "Product_SKU": ["SKU-001", "SKU-002"],
+            "MRP": [1899.00, 2499.00],
             "Product_Cost": [500.00, 750.00],
             "Target_Net_Profit": [100.00, 150.00],
-            "MRP": [1899.00, 2499.00],
             "Royalty_Percent": [10, 0] 
         })
         st.download_button(
@@ -287,7 +287,10 @@ with tab2:
                                 discounts.append(None)
                             else: 
                                 statuses.append("OK")
-                                discounts.append(((mrp - sp) / mrp) * 100)
+                                if mrp > 0: # Avoid division by zero
+                                    discounts.append(((mrp - sp) / mrp) * 100)
+                                else:
+                                    discounts.append(0)
                         
                         # Add new columns to DataFrame
                         df["Taxable_Amount"] = taxable
@@ -310,7 +313,7 @@ with tab2:
                         df[existing_cols_to_round] = df[existing_cols_to_round].round(2)
                         
                         st.session_state.processed_price_df = df
-                        st.success(f"Processing Complete! {len(df)} products processed.")
+                        st.success(f"Processing complete! {len(df)} products processed.")
 
         except Exception as e:
             st.error(f"Error processing file: {e}")

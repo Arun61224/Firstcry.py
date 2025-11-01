@@ -123,8 +123,6 @@ with tab1:
 
     # 2. Upload File
     st.subheader("Step 2: Upload and Process File")
-    # REMOVED: Royalty Checkbox
-    # royalty_10_percent_tab1 = st.checkbox("Apply 10% Royalty?", value=True, key="roy1")
     
     uploaded_payout_file = st.file_uploader("Upload your Payout Template", type=["xlsx"], key="payout_uploader")
 
@@ -140,7 +138,6 @@ with tab1:
                 # 3. Process File
                 if st.button("Process Payout File", type="primary"):
                     with st.spinner("Calculating..."):
-                        # REMOVED: royalty_percent variable
                         
                         results_list = []
                         for _, row in df.iterrows():
@@ -178,15 +175,19 @@ with tab1:
     # 4. Download Results
     if "processed_payout_df" in st.session_state:
         st.subheader("Step 3: Download Results")
-        st.dataframe(st.session_state.processed_payout_df.head(), use_container_width=True)
         
-        # --- MODIFIED: Column list for output file is now minimal ---
+        # --- MODIFIED: Column list for output file/preview is now minimal ---
         cols_order = [
             "Product_SKU", 
             "Given_Sale_Price", 
             "Product_Cost", 
             "Final_Settled_Amount"
         ]
+        
+        # --- MODIFIED: Show only minimal columns in the preview dataframe ---
+        cols_to_show = [col for col in cols_order if col in st.session_state.processed_payout_df.columns]
+        st.dataframe(st.session_state.processed_payout_df[cols_to_show].head(), use_container_width=True)
+        
         
         # --- MODIFIED: Highlighting Net_Profit (removed) changed to Final_Settled_Amount ---
         excel_data = to_excel(st.session_state.processed_payout_df, cols_order, highlight_col_name="Final_Settled_Amount")
@@ -222,8 +223,6 @@ with tab2:
 
     # 2. Upload File
     st.subheader("Step 2: Upload and Process File")
-    # REMOVED: Royalty Checkbox
-    # royalty_10_percent_tab2 = st.checkbox("Apply 10% Royalty?", value=True, key="roy2")
     
     uploaded_price_file = st.file_uploader("Upload your Price Template", type=["xlsx"], key="price_uploader")
 
@@ -239,7 +238,6 @@ with tab2:
                 # 3. Process File
                 if st.button("Process Price File", type="primary"):
                     with st.spinner("Calculating..."):
-                        # REMOVED: royalty_percent and royalty_r variables
                         
                         sale_prices = []
                         for _, row in df.iterrows():
@@ -315,9 +313,8 @@ with tab2:
     # 4. Download Results
     if "processed_price_df" in st.session_state:
         st.subheader("Step 3: Download Results")
-        st.dataframe(st.session_state.processed_price_df.head(), use_container_width=True)
         
-        # --- MODIFIED: Updated column order for export based on your request ---
+        # --- MODIFIED: Updated column order for export/preview based on your request ---
         cols_order = [
             "Product_SKU",
             "MRP",
@@ -325,6 +322,11 @@ with tab2:
             "Net_Payout_Amount",
             "Status"
         ]
+        
+        # --- MODIFIED: Show only minimal columns in the preview dataframe ---
+        cols_to_show = [col for col in cols_order if col in st.session_state.processed_price_df.columns]
+        st.dataframe(st.session_state.processed_price_df[cols_to_show].head(), use_container_width=True)
+        
         
         excel_data = to_excel(st.session_state.processed_price_df, cols_order, highlight_col_name="Required_Sale_Price")
         st.download_button(
@@ -345,17 +347,14 @@ with tab3:
             sp_entry = st.number_input("Given Sale Price (₹)", min_value=0.0, step=1.0)
             pc_entry = st.number_input("Product Cost (₹)", min_value=0.0, step=1.0)
         with col2:
-            # REVERTED: Removed default value
-            gst_entry = st.number_input("GST Rate (%)", min_value=0.0, step=1.0) 
+            # --- MODIFIED: Added default value 5.0 ---
+            gst_entry = st.number_input("GST Rate (%)", min_value=0.0, value=5.0, step=1.0) 
             # REVERTED: Replaced checkbox with number input
-            # roy_10_check_tab3 = st.checkbox("Apply 10% Royalty?", value=True, key="roy3")
             roy_entry = st.number_input("Royalty (%)", min_value=0.0, value=0.0, step=1.0)
         
         submitted = st.form_submit_button("Calculate Payout", type="primary")
 
     if submitted:
-        # REMOVED: Logic for checkbox
-        # roy_entry = 10.0 if roy_10_check_tab3 else 0.0
         
         results = calculate_payout(sp_entry, pc_entry, gst_entry, roy_entry, flat_rate, tds_rate, tcs_rate)
         
@@ -390,17 +389,14 @@ with tab4:
             pc_price_entry = st.number_input("Product Cost (₹)", min_value=0.0, step=1.0, key="sp_pc")
             profit_price_entry = st.number_input("Target Net Profit (₹)", min_value=0.0, step=1.0, key="sp_profit")
         with col2:
-            # REVERTED: Removed default value
-            gst_price_entry = st.number_input("GST Rate (%)", min_value=0.0, step=1.0, key="sp_gst")
+            # --- MODIFIED: Added default value 5.0 ---
+            gst_price_entry = st.number_input("GST Rate (%)", min_value=0.0, value=5.0, step=1.0, key="sp_gst")
             # REVERTED: Replaced checkbox with number input
-            # roy_10_check_tab4 = st.checkbox("Apply 10% Royalty?", value=True, key="roy4")
             roy_price_entry = st.number_input("Royalty (%)", min_value=0.0, value=0.0, step=1.0, key="sp_roy")
         
         submitted_price = st.form_submit_button("Calculate Price", type="primary")
 
     if submitted_price:
-        # REMOVED: Logic for checkbox
-        # roy_price_entry = 10.0 if roy_10_check_tab4 else 0.0
         
         # Calculate the required sale price
         req_sp = calculate_sale_price(

@@ -4,12 +4,12 @@ import io
 from openpyxl.styles import PatternFill
 from openpyxl.utils import get_column_letter
 
-# --- Core Logic Functions (Same as before) ---
+# --- Core Logic Functions (MODIFIED: GST Hardcoded to 5%) ---
 
-def calculate_sale_price(product_cost, target_profit, gst_rate, royalty_percent, flat_rate, tds_rate, tcs_rate):
+def calculate_sale_price(product_cost, target_profit, royalty_percent, flat_rate, tds_rate, tcs_rate):
     """(Backward Calculation) Calculates the required Sale Price."""
     try:
-        gst_r = gst_rate / 100.0
+        gst_r = 0.05 # GST hardcoded to 5%
         royalty_r = royalty_percent / 100.0
         numerator = target_profit + product_cost
         
@@ -26,13 +26,13 @@ def calculate_sale_price(product_cost, target_profit, gst_rate, royalty_percent,
     except Exception: 
         return None
 
-def calculate_payout(sale_price, product_cost, gst_rate, royalty_percent, flat_rate, tds_rate, tcs_rate):
+def calculate_payout(sale_price, product_cost, royalty_percent, flat_rate, tds_rate, tcs_rate):
     """(Forward Calculation) Calculates profit from a given Sale Price."""
     try:
         if sale_price <= 0:
             return { "Net_Profit": -product_cost, "Final_Settled_Amount": -product_cost, "Flat_Deduction_Amount": 0, "Royalty_Fee_Amount": 0, "TDS_Amount": 0, "TCS_Amount": 0, "Taxable_Amount": 0 }
             
-        gst_r = gst_rate / 100.0
+        gst_r = 0.05 # GST hardcoded to 5%
         royalty_r = royalty_percent / 100.0
         
         taxable_amount = sale_price / (1 + gst_r)
@@ -90,6 +90,7 @@ def to_excel(df, cols_order, highlight_col_name=None):
 
 st.set_page_config(layout="wide", page_title="Profit Calculator")
 st.title("💰 Profit Calculator App")
+st.info("GST is fixed at 5% for all calculations.") # Added info box
 
 # --- Global Deduction Settings (Sidebar) ---
 st.sidebar.header("Global Deduction Settings")
@@ -107,12 +108,12 @@ with tab1:
 
     # 1. Download Template
     with st.expander("Step 1: Download Payout Template"):
+        # MODIFIED: Removed GST_Rate_Percent
         payout_template_df = pd.DataFrame({
             "Product_SKU": ["SKU-001", "SKU-002"],
             "Given_Sale_Price": [1045.00, 1500.00],
             "Product_Cost": [500.00, 750.00],
-            "GST_Rate_Percent": [5, 12], # REVERTED
-            "Royalty_Percent": [10, 0] # REVERTED
+            "Royalty_Percent": [10, 0] 
         })
         st.download_button(
             label="Download Payout Template",
@@ -131,7 +132,8 @@ with tab1:
             df = pd.read_excel(uploaded_payout_file)
             st.dataframe(df.head(), use_container_width=True)
 
-            required_cols = ["Given_Sale_Price", "Product_Cost", "GST_Rate_Percent", "Royalty_Percent"] # REVERTED
+            # MODIFIED: Removed GST_Rate_Percent
+            required_cols = ["Given_Sale_Price", "Product_Cost", "Royalty_Percent"] 
             if not all(col in df.columns for col in required_cols): # Check against required_cols
                 st.error(f"Input file must have columns: {', '.join(required_cols)}")
             else:
@@ -141,9 +143,10 @@ with tab1:
                         
                         results_list = []
                         for _, row in df.iterrows():
+                            # MODIFIED: Removed GST_Rate_Percent from call
                             payout_data = calculate_payout(
-                                row["Given_Sale_Price"], row["Product_Cost"], row["GST_Rate_Percent"],
-                                row["Royalty_Percent"], # REVERTED
+                                row["Given_Sale_Price"], row["Product_Cost"],
+                                row["Royalty_Percent"],
                                 flat_rate, tds_rate, tcs_rate)
                             results_list.append(payout_data)
 
@@ -206,13 +209,13 @@ with tab2:
 
     # 1. Download Template
     with st.expander("Step 1: Download Price Template"):
+        # MODIFIED: Removed GST_Rate_Percent
         price_template_df = pd.DataFrame({
             "Product_SKU": ["SKU-001", "SKU-002"],
             "Product_Cost": [500.00, 750.00],
             "Target_Net_Profit": [100.00, 150.00],
-            "GST_Rate_Percent": [5, 12], # REVERTED
             "MRP": [1899.00, 2499.00],
-            "Royalty_Percent": [10, 0] # REVERTED
+            "Royalty_Percent": [10, 0] 
         })
         st.download_button(
             label="Download Price Template",
@@ -231,7 +234,8 @@ with tab2:
             df = pd.read_excel(uploaded_price_file)
             st.dataframe(df.head(), use_container_width=True)
 
-            required_cols = ["Product_Cost", "Target_Net_Profit", "GST_Rate_Percent", "MRP", "Royalty_Percent"] # REVERTED
+            # MODIFIED: Removed GST_Rate_Percent
+            required_cols = ["Product_Cost", "Target_Net_Profit", "MRP", "Royalty_Percent"] 
             if not all(col in df.columns for col in required_cols): # Check against required_cols
                 st.error(f"Input file must have columns: {', '.join(required_cols)}")
             else:
@@ -241,9 +245,10 @@ with tab2:
                         
                         sale_prices = []
                         for _, row in df.iterrows():
+                            # MODIFIED: Removed GST_Rate_Percent from call
                             sp = calculate_sale_price(
-                                row["Product_Cost"], row["Target_Net_Profit"], row["GST_Rate_Percent"],
-                                row["Royalty_Percent"], # REVERTED
+                                row["Product_Cost"], row["Target_Net_Profit"], 
+                                row["Royalty_Percent"],
                                 flat_rate, tds_rate, tcs_rate)
                             sale_prices.append(sp)
                         df["Required_Sale_Price"] = sale_prices
@@ -254,8 +259,8 @@ with tab2:
                         for _, row in df.iterrows():
                             sp, mrp = row["Required_Sale_Price"], row["MRP"]
                             cost, target_profit = row["Product_Cost"], row["Target_Net_Profit"]
-                            gst_r = row["GST_Rate_Percent"] / 100.0
-                            royalty_r = row["Royalty_Percent"] / 100.0 # REVERTED
+                            gst_r = 0.05 # MODIFIED: Hardcoded GST 5%
+                            royalty_r = row["Royalty_Percent"] / 100.0 
                             
                             if sp is None or pd.isna(sp):
                                 # Append 0 for all numerical calculation columns
@@ -268,7 +273,7 @@ with tab2:
                             taxable_amount, gst_value = sp / (1 + gst_r), sp - (sp / (1 + gst_r))
                             taxable.append(taxable_amount)
                             flat.append(sp * flat_rate)
-                            royalty.append(sp * royalty_r) # REVERTED
+                            royalty.append(sp * royalty_r) 
                             tds.append(taxable_amount * tds_rate)
                             tcs.append(gst_value * tcs_rate)
                             
@@ -347,16 +352,16 @@ with tab3:
             sp_entry = st.number_input("Given Sale Price (₹)", min_value=0.0, step=1.0)
             pc_entry = st.number_input("Product Cost (₹)", min_value=0.0, step=1.0)
         with col2:
-            # --- MODIFIED: Added default value 5.0 ---
-            gst_entry = st.number_input("GST Rate (%)", min_value=0.0, value=5.0, step=1.0) 
-            # REVERTED: Replaced checkbox with number input
+            # MODIFIED: Removed GST input
             roy_entry = st.number_input("Royalty (%)", min_value=0.0, value=0.0, step=1.0)
+            st.write("GST fixed at 5%") # Placeholder
         
         submitted = st.form_submit_button("Calculate Payout", type="primary")
 
     if submitted:
         
-        results = calculate_payout(sp_entry, pc_entry, gst_entry, roy_entry, flat_rate, tds_rate, tcs_rate)
+        # MODIFIED: Removed GST from call
+        results = calculate_payout(sp_entry, pc_entry, roy_entry, flat_rate, tds_rate, tcs_rate)
         
         if results:
             st.subheader("Results")
@@ -389,21 +394,20 @@ with tab4:
             pc_price_entry = st.number_input("Product Cost (₹)", min_value=0.0, step=1.0, key="sp_pc")
             profit_price_entry = st.number_input("Target Net Profit (₹)", min_value=0.0, step=1.0, key="sp_profit")
         with col2:
-            # --- MODIFIED: Added default value 5.0 ---
-            gst_price_entry = st.number_input("GST Rate (%)", min_value=0.0, value=5.0, step=1.0, key="sp_gst")
-            # REVERTED: Replaced checkbox with number input
+            # MODIFIED: Removed GST input
             roy_price_entry = st.number_input("Royalty (%)", min_value=0.0, value=0.0, step=1.0, key="sp_roy")
+            st.write("GST fixed at 5%") # Placeholder
         
         submitted_price = st.form_submit_button("Calculate Price", type="primary")
 
     if submitted_price:
         
         # Calculate the required sale price
+        # MODIFIED: Removed GST from call
         req_sp = calculate_sale_price(
             pc_price_entry, 
             profit_price_entry, 
-            gst_price_entry, 
-            roy_price_entry, # REVERTED
+            roy_price_entry,
             flat_rate, 
             tds_rate, 
             tcs_rate
@@ -418,11 +422,11 @@ with tab4:
             
             # --- Verification Step ---
             # Re-calculate the payout using the new Sale Price to show details
+            # MODIFIED: Removed GST from call
             results = calculate_payout(
                 req_sp, 
                 pc_price_entry, 
-                gst_price_entry, 
-                roy_price_entry, # REVERTED
+                roy_price_entry,
                 flat_rate, 
                 tds_rate, 
                 tcs_rate
